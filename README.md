@@ -3,6 +3,7 @@ Purpose:
 This is the reposotory containing the scripts and (the most important) data used in my 3 week project in Introduction to Intelligent Systems.
 
 Descriptions:
+
 Main.py: Contains the actual training- and evaluation loops.
 InferentialStatistics.py: Contains the tools neccessary for doing inferential- but also descriptive statistics on the data.
 QModels.py: Contains the actual DDQN and DQN model-classes.
