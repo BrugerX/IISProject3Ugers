@@ -1,4 +1,4 @@
-from QModels import DQNAgentFullSpace,DQNAgentXY
+from XY-FullSpace-QModels import DQNAgentFullSpace,DQNAgentXY
 from GridWorlds import GridWorld
 import torch
 import numpy as np
