@@ -1,13 +1,17 @@
-import GridWorlds
-import time
+import pandas as pd
 import numpy as np
+import DataProcessing as dp
+
+time_names = [r"C:\Users\benja\PycharmProjects\IISProject\ErrorPilotStudy\Pilot_Study_ErrorsDDQN_2",r"C:\Users\benja\PycharmProjects\IISProject\ErrorPilotStudy\Pilot_Study_ErrorsDQN_2",r"C:\Users\benja\PycharmProjects\IISProject\ErrorPilotStudy\Pilot_Study_ErrorsDDQN_4",r"C:\Users\benja\PycharmProjects\IISProject\ErrorPilotStudy\Pilot_Study_ErrorsDQN_4",r"C:\Users\benja\PycharmProjects\IISProject\ErrorPilotStudy\Pilot_Study_ErrorsDDQN_6",r"C:\Users\benja\PycharmProjects\IISProject\ErrorPilotStudy\Pilot_Study_ErrorsDQN_6"]#The files are next to eachother for a better comparison
 
 
-env = GridWorlds.GridWorld(seed=1)
+over_ests = []
+std_over_ests = []
+for name in time_names:
+    col_arr = dp.columns_To_Arrays(name)
+    value = col_arr[1]
+    estimate = col_arr[2]
+    over_estimation = estimate - value
+    over_ests = over_ests+ [over_estimation]
 
-board = env.board
-env.board[env.x,env.y] = env.board[env.x,env.y] -1
-print(env.board)
-env.board[1,1] = env.board[9,9] + 1
-env.render()
-time.sleep(9)
+print(dp.confidence_From_Arrays(over_ests))
