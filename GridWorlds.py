@@ -22,8 +22,9 @@ class GridWorld():
     pathColor = (225, 220, 225)
     wallColor = (157, 143, 130)
 
-    def __init__(self, state=None,seed =1):
+    def __init__(self, state=None,seed =1,noStay_Rewards = False):
         pygame.init()
+        self.noStay_Rewards = noStay_Rewards
         self.seed = seed
         self.reward = 0
         if state is None:
@@ -159,10 +160,13 @@ class GridWorld():
         board[newx, newy] += 1
         self.x, self.y = newx, newy
 
+        if [newx,newy] == [xOriginal,yOriginal] and self.noStay_Rewards == True:
+            reward = -2
+
         # Take key
-        if board[newx, newy] & 2:
+        if board[newx, newy] & 2 and self.has_key == False:
             board[newx, newy] -= 2
-            reward = 50
+            reward = 100
             has_key = True
 
         # On door with key?
