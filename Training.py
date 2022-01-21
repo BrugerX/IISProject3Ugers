@@ -12,6 +12,7 @@ import torch.optim as optim
 import DataProcessing as dp
 import seaborn as sns
 from QModels2 import DQNAgent
+from pathlib import Path
 """"Settings for the experiment:
 seed = Environment seed (1-6)
 number_actions = Number of actions possible
@@ -97,7 +98,7 @@ def double_DDQN_TrainingLoop(dqn_model,n,noDone = False): #We have two seperate 
 
     for _ in range(100*1000): #Fill up the EMR before the network gets stuck in a self-reinforcing loop (Outer walls)
         dqn_model.Training_step()
-    dqn.model.epsilon = 1  # Reset epsilon
+    dqn_model.epsilon = 1  # Reset epsilon
     dqn_model.optimizeDDQN(no_done=noDone)
     for _ in range((n-dqn_model.batch_size)):
         dqn_model.Training_step()
@@ -112,7 +113,7 @@ def DQN_TrainingLoop(dqn_model,n,noDone = False): #We have two seperate function
 
     for _ in range(100*1000): #Fill up the EMR before the network gets stuck in a self-refinforcing loop (Outer walls)
         dqn_model.Training_step()
-    dqn.model.epsilon = 1 #Reset epsilon
+    dqn_model.epsilon = 1 #Reset epsilon
     dqn_model.optimizeDDQN(no_done=noDone)
     for _ in range((n-dqn_model.batch_size)):
         dqn_model.Training_step()
@@ -140,3 +141,15 @@ def createCSV(csv_Name):
     df.to_csv(f"{csv_Name}", index=False)
 
 
+def Multiple_Heat_Maps(folder):
+    file_paths = Path(folder).glob("*")
+    for file in file_paths:
+        print(file)
+        actions_size,DQN_type = dp.auto_read(file)
+        if actions_size == 1 and DQN_type == "DDQN":
+            actions_size = 8
+        action_space = createActionSpace(actions_size)
+        dqn = dqn = DQNAgent(layers_shape=(520,1),state_representation=torch.tensor((1,2,3),dtype=torch.float32),env=GridWorld(),actions_List=action_space,load_Name=[None,None],save_Name=[None,None])
+        dqn.pNet = load_GPU_network(fr"{file}",dqn.pNet)
+        Heat_map = dp.get_Heat_Map(dqn.pNet,500*1000,10)
+        Heat_map.savefig(fr"{folder}/{DQN_type}_{actions_size}HEATMAP")
