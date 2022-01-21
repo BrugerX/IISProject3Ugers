@@ -21,3 +21,7 @@ Training: Contains various files for training a (D)DQN Network
 Conditions:
 
 In order to run the GridWorlds.py script all images and board-text-files must be in the same folder as GridWorlds.py.
+
+Data:
+
+For reasons of limited data storage on my personal PC and a 2GB file size limit on Github, I have not been able to upload all the data from the experiment. I have uploaded the file FinalBigData which contains all the means. Although, it should not be hard to reproduce the results given the files in this repository.
