@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 
 #Creates a pd.DataFrame object based on a CSV file, which it then turns into a list of numpy arrays containing only the numerical values of each column
 def columns_To_Arrays(fileName):
-    df = pd.read_csv(fileName)
+    df = pd.read_csv(fileName,index_col=[0])
     arrays_list = []
     for column in df.columns:
         arr = pd.to_numeric(df[column], errors="coerce").dropna()
@@ -90,9 +90,9 @@ def get_Heat_Map(dqn,n,max_same_state,path,normalized = False):
         move = dqn.actions_available[max_a] #Get the optimal action
         stepTuple = dqn.env.step(move) #Step in the environment
         stateNew = torch.tensor(stepTuple[0], dtype=torch.float32)
-        heat_map[dqn.env.y][dqn.env.x] = heat_map[dqn.env.y][dqn.env.x] + 1
         dqn.env.render()
-        time.sleep(0.5)
+        time.sleep(10)
+        heat_map[dqn.env.y][dqn.env.x] = heat_map[dqn.env.y][dqn.env.x] + 1
         if torch.all(state.eq(stateNew)):
             nr_same += 1
         state = stateNew
@@ -167,7 +167,7 @@ Only recognizes paths in the format of EXPERIMENTNAME_TYPE_ACTION SPACE(.csv)
 def auto_read(path):
     path = str(path) #Otherwise we'll get a "path" object
     path_list = path.split("_")
-
+    print(path_list)
     action_space = int(path_list[-1][0]) #might contain csv
 
     type_list = path_list[-2]
@@ -182,7 +182,9 @@ def auto_read(path):
     return action_space,DQN_type
 
 
-""" """
+""" 
+Takes a folder of run data
+"""
 def Big_Data_CatPlot(folder_path,action_spaces = None, DQN_types = None):
     file_paths = Path(folder_path).glob("*")
     dataFrame_appendix = []
@@ -191,8 +193,9 @@ def Big_Data_CatPlot(folder_path,action_spaces = None, DQN_types = None):
             if action_spaces == None and DQN_types == None:
                 action,DQN = auto_read(file) #Get action spaces and DQN types
                 temporary_DF = get_Catplot_DF(file, action, DQN) #Create a catplot dataframe
+                temporary_DF = temporary_DF.groupby(["value_type","DQN_type"],as_index=False).mean()
                 dataFrame_appendix = dataFrame_appendix + [temporary_DF] #add to the appendices
-                print(dataFrame_appendix)
+
     big_Frame = pd.concat(dataFrame_appendix) #Turn into one big CatPlot :)
     print("Done with appending DataFrames")
     return  big_Frame

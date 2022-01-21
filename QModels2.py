@@ -16,7 +16,6 @@ class DQNAgent:
 
     Parameters:
 
-    actions_num = Amount of possible actions, also the size of the output layer.
     actions_Lists = All possible moves (used for selecting greedy policy and stepping)
     state_representation = A tensor representation of the environment state, will be used to initialize the size of the input layer of the NN
     feature_type = XY or fullspace by default
@@ -36,35 +35,37 @@ class DQNAgent:
     env = An object containing the game environment
     load_Name = A tuple containing the name of the models' state dictionary in the format (tNetPath,pNetPath) - it must be stored in the same folder as the qTest.py file
     save_Name = A string containing the name of the models' state dictionary in the format (tNetPath,pNetPath) - it will be save in the same folder as q.Test.py
-
+    csv_Name = A string representing the path of the saved CSV file.
+    save_cutoff = Intervals at which to save the reward,true_vale,estimate arrays in order to free up space in the memory
 
     """
 
     def __init__(self,
-                 actions_num=4,
                  actions_List=None,
                  state_representation=None,
                  feature_type = None,
-                 layers_shape=(10, 10),
+                 layers_shape=(520, 1),
                  activation_function=torch.nn.ReLU(),
                  memory_size=100000,
                  batch_size=32,
                  T_train=4,
                  T_target=10000,
-                 T_evaluate=10000,
-                 eval_Sample_Sizes=1000,
+                 T_evaluate=100000,
+                 eval_Sample_Sizes=100000,
                  gamma=0.99,
                  epsilon_start=1,
-                 epsilon_decay=(0.9) / (1000),
+                 epsilon_decay=0.09/10000,
                  epsilon_final=0.1,  # Based on the Van Hasselt DDQN article
                  reward_System=(-10, 10 * 9, 0, 0),
                  learning_rate=0.00025,
                  env=None,
                  load_Name=None,
-                 save_Name=None):
+                 save_Name=None,
+                 csv_Name = None,
+                 save_Cutoff = 10000):
 
         # Network features
-        self.actions_num = actions_num
+        self.actions_num = len(actions_List)
         self.actions_available = actions_List
         self.state_representation = state_representation
         self.layers_shape = layers_shape
@@ -88,7 +89,7 @@ class DQNAgent:
         self.memory_size = memory_size
         self.batch_size = batch_size
         self.EMR = ExperienceMemoryReplay(memory_size=self.memory_size,
-                                          batch_size=self.batch_size)  # EMR, it's short for ExperienceMemoryReplay ;)
+                                          batch_size=self.batch_size)
 
         # Policy and Value Evaluation
         self.gamma = gamma
@@ -111,7 +112,7 @@ class DQNAgent:
         self.feature_Type = feature_type
 
         # For evaluation of the networks
-        self.losses = []
+        self.losses = np.array([])
         self.T_evaluate = T_evaluate
         self.eval_Sample_Size = eval_Sample_Sizes
         self.true_Scores_Averages = []  # For storing the average after each evaluation, idx * eval_Sample_Sizes = timestep at which we evaluated.
@@ -119,10 +120,13 @@ class DQNAgent:
         self.rewards_List = np.array([])  # For the actual game score
         self.greedy_Estimates = np.array([])
 
+        #Data storage
+        self.csv_Name = csv_Name
+        self.save_Cutoff = save_Cutoff
     """Initializes the target network and deep copies the policy network unto this.
 
-    Target network architecture = [input_layers]-[activation_function][layers_shape*]-[actions_num] 
-    *Each layer in the connected linear layer is seperated by the activation function
+    Target network architecture = [input_layers]-[activation_function][layers_shape]-[actions_num] 
+    
 
     """
 
@@ -152,37 +156,6 @@ class DQNAgent:
             except:
                 print(f"Model named {self.load_NamePolicy} could not be loaded; Will proceed with randomized weights")
 
-    """For use with the frozenLake environment
-
-    Arguments:
-    env.desc = a NxN np.array
-    env.s = A single integer representing the index at which the agent is
-
-    Output: A one dimensional tensor representing the ASCII-char codes for each letter in the grid.
-    This way we get a numerical representation of the board, which we can use to train the DQN.
-    """
-
-    """
-    Rewards:
-    - Dying: -10 * NxN * gamma
-    - Winning: 10* NxN * gamma
-    - Surviving: 1
-
-    We add the winning and dying bonus based on the tile size, as this will ensure, that the optimal policy will be to win the game in case we have big boards.
-
-    """
-
-    def evaluateReward(self, tuple):
-
-        if tuple[2]:
-            if tuple[1] > 0:  # We win
-                return self.win_Reward  # The input depth is the number of tiles on the board i.e NxN
-            else:  # We lose
-                return self.die_Reward
-        if self.S_t[-1] == tuple[0] or self.S_t[-1]:
-            return self.stay_Reward
-        else:
-            return self.survive_Reward
 
     # Chooses between a greedy or exploratory action
     def greedVsExp(self):
@@ -190,18 +163,18 @@ class DQNAgent:
         if self.epsilon > random.random():  # Choose exploratory
             return random.randint(0, self.actions_num - 1)
         else:  # Else choose greedy
-            a = torch.argmax(self.pNet(self.S_t)).item()
-            return a
+            return torch.argmax(self.pNet(self.S_t)).item()
 
-    """This is the primary method for the agent to interact with its environment and collect experience.
-
-    """
     def get_State(self):
         if self.feature_Type == "XY":
-            state = torch.tensor((self.env.x,self.env.y,self.env.has_key),dtype=torch.float32)
+            return torch.tensor( #XY and haskey only
+                (self.env.x, self.env.y, self.env.has_key), dtype=torch.float32
+            )
+
         else:
-            state = torch.tensor((self.env.board+[self.env.has_key]),dtype=torch.float32).flatten()
-        return state
+            return torch.tensor( #The whole board + haskey
+                (self.env.board + [self.env.has_key]), dtype=torch.float32
+            ).flatten()
 
     def Training_step(self):
         # 1. Decay Epsilon
@@ -229,32 +202,50 @@ class DQNAgent:
         if stepTuple[2]:
             self.env.reset()
 
+    #Saves either the evaluation scores or the training loss to the specified CSV name.
+    def save_To_CSV(self):
+        losses_df = pd.DataFrame({"losses":self.losses})
+        reward_df = pd.DataFrame({"rewards": self.rewards_List})
+        value_df = pd.DataFrame({"values": self.true_Values})
+        estimates_df = pd.DataFrame({"estimates": self.greedy_Estimates})
+        writingDf = pd.concat([reward_df, value_df, estimates_df,losses_df])
+        writingDf.to_csv(f"{self.csv_Name}", mode="a", header=False,index=False)  # The CSV file is created outside of the DQNAgent object
+        self.rewards_List = np.array([])  # Cleaning up - since training and evaluation will never run in parallel, we can safely clean up both sets of data
+        self.greedy_Estimates = np.array([])
+        self.true_Values = np.array([])
+        self.losses = np.array([])
+        del(writingDf)
+
     #Collects one sample per step (Read the pseudocode)
     def follow_Optimal_Average(self):
         score = 0
-        Greedy_estimate = 0
-        k = 0 #Steps since terminal
+        k = 0 #Steps since terminal state
+        nr_same = 0 #How many times it stays in the same spot
         for m in range(self.eval_Sample_Size):
-            Q_tuple = self.pNet.forward(self.get_State())
+            state = self.get_State()
+            Q_tuple = self.pNet.forward(state)
             greedy_Estimate = torch.max(Q_tuple).item()
             greedy_Action = torch.argmax(Q_tuple)
             stepTuple = self.env.step(self.actions_available[greedy_Action])
             reward = stepTuple[1]
             true_Value = reward * self.gamma ** k
             k += 1
-            np.append(self.rewards_List,reward)
-            np.append(self.true_Values,true_Value)
-            np.append(self.greedy_Estimates,greedy_Estimate)
-            if stepTuple[2]:
+            self.rewards_List = np.append(self.rewards_List,reward)
+            self.true_Values = np.append(self.true_Values,true_Value)
+            self.greedy_Estimates = np.append(self.greedy_Estimates,greedy_Estimate)
+            if stepTuple[2]: #If a terminal state is reached
                 k = 0
                 self.env.reset()
+            if m%self.save_Cutoff == 0: #Save at a given interval to spare the flash memory
+                self.save_To_CSV()
+        self.save_To_CSV()
 
     def synchronize(self):
         self.tNet = copy.deepcopy(self.pNet)
         if self.save_NameTarget != None:
             torch.save(self.tNet, self.save_NameTarget)
 
-    def optimizeDQN(self):
+    def optimizeDQN(self,no_done = True):
         # 1. Get sample batch and reset optimizer
         batch = self.EMR.sample()  # Returns a list of tuples in the format (S_t,a,R_t+1,S_t+1,Done?,Probability)
         self.optimizerP.zero_grad()
@@ -264,9 +255,11 @@ class DQNAgent:
         prediction_Tensor = []
 
         for exp in batch:
-            maxTerm = self.gamma * max(self.pNet.forward(exp[3]))
-            target_Tensor = target_Tensor + [exp[2] + maxTerm]
-            prediction_Tensor = prediction_Tensor + [self.pNet.forward(exp[0])[exp[1]]]
+            max_Q = self.gamma * max(self.pNet.forward(exp[3]))
+            if batch[4] and no_done == True: #If done
+                max_Q = 0
+            target_Tensor += [exp[2] + max_Q]
+            prediction_Tensor += [self.pNet.forward(exp[0])[exp[1]]]
 
         target_Tensor = torch.tensor(target_Tensor, dtype=torch.float32, requires_grad=True)
         prediction_Tensor = torch.tensor(prediction_Tensor, dtype=torch.float32, requires_grad=True)
@@ -275,15 +268,15 @@ class DQNAgent:
         loss = self.lossFn(prediction_Tensor, target_Tensor)
         loss.backward()
         self.optimizerP.step()
-        self.losses = self.losses + [loss.item()]
-
+        self.losses = np.append(self.losses,loss.item())
+        self.save_To_CSV()
         # 4. Save the model
         if self.save_NameTarget != None:
             torch.save(self.pNet, self.save_NamePolicy)
 
-    def optimizeDDQN(self):
+    def optimizeDDQN(self,no_done = True):
         time_start = time.perf_counter()
-        # 1. Get sample batch, reset optimizer and decide how many transitions to train the policy network with
+        # 1. Get sample batch and reset optimizer
         batch = self.EMR.sample()
         self.optimizerP.zero_grad()
 
@@ -291,10 +284,13 @@ class DQNAgent:
         policy_Tensor = []
 
         # 2. Calculate policy and target
-        for exp in batch:  # exp = (S_t,a,R_t+1,S_t+1,Done?,Prob)
-            max_a = torch.argmax(self.pNet.forward(exp[3])).item()
-            target_Tensor = target_Tensor + [exp[2] + self.gamma * self.tNet.forward(exp[3])[max_a]]
-            policy_Tensor = policy_Tensor + [self.pNet.forward(exp[0])[exp[1]]]
+        for exp in batch:  # exp = (S_t,a,R_t+1,S_t+1,Done?)
+            max_a = torch.argmax(self.pNet.forward(exp[3])).item() #Get argmax with policy weights
+            max_Q = self.tNet.forward(exp[3])[max_a] #Get the greedy quality with the target weights
+            if exp[4] and no_done == True:
+                max_Q = 0
+            target_Tensor += [exp[2] + self.gamma * max_Q]
+            policy_Tensor += [self.pNet.forward(exp[0])[exp[1]]]
 
         target_Tensor = torch.tensor(target_Tensor, dtype=torch.float32, requires_grad=True)
         policy_Tensor = torch.tensor(policy_Tensor, dtype=torch.float32, requires_grad=True)
@@ -303,8 +299,8 @@ class DQNAgent:
         lossP = self.lossFn(policy_Tensor, target_Tensor)
         lossP.backward()
         self.optimizerP.step()
-        self.losses = self.losses + [lossP.item()]
-
+        self.losses = np.append(self.losses,lossP.item())
+        self.save_To_CSV()
         # 4. Save the models
         if self.save_NamePolicy != None:
             torch.save(self.pNet, self.save_NamePolicy)
@@ -363,16 +359,15 @@ class NeuralNetwork(torch.nn.Module):
 
     def makeModel(self):
         networkStack = []
-        networkStack = networkStack + [(torch.nn.Linear(self.input_width, self.width))]  # Input layer
+        networkStack += [(torch.nn.Linear(self.input_width, self.width))]+ [self.activation_function]
         hiddenLayers = [torch.nn.Linear(self.width,
                                         self.width)] * self.depth  # There is no non-linear function between the last hidden layer and the output
-        networkStack = networkStack + hiddenLayers + [self.activation_function]
-        networkStack = networkStack + [(torch.nn.Linear(self.width, self.output_width))]  # Output layer
+        networkStack += hiddenLayers
+        networkStack += [(torch.nn.Linear(self.width, self.output_width))]
         self.stack = torch.nn.Sequential(*networkStack)
 
     def forward(self, input):
         input = input.to(self.device)
-        output = self.stack(input)
-        return output
+        return self.stack(input)
 
 
