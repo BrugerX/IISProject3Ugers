@@ -184,6 +184,6 @@ for idx,exp_Nr in enumerate(experiment_Names_list):
                        epsilon_start=1, T_evaluate=T_eval, eval_Sample_Sizes=sample_Size, save_Cutoff=save_Cutoff,
                        epsilon_decay=epsilon_decay, feature_type="XY", csv_Name=f"{csv_Name}")
         if idx != 2:
-            double_DDQN_TrainingLoop(dqn,n,no_done=no_done)
+            tn.double_DDQN_TrainingLoop(dqn,n,no_done=no_done)
         else:
-            DQN_TrainingLoop(dqn,n,no_done=no_done)
+            tn.DQN_TrainingLoop(dqn,n,no_done=no_done)
